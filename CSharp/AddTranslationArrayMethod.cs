@@ -1,103 +1,46 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
+using System.Net.Http;
 using System.Text;
-using System.Net;
-using System.IO;
-using System.Runtime.Serialization.Json;
-using System.Runtime.Serialization;
-using System.Web;
-using System.ServiceModel.Channels;
-using System.ServiceModel;
+using System.Threading.Tasks;
 
-namespace MicrosoftTranslatorSdk.HttpSamples
+namespace Microsoft.Translator.Samples
 {
-    class Program
+    class AddTranslationArraySample
     {
-        static void Main(string[] args)
-        {
-            AdmAccessToken admToken;
-            string headerValue;
-            //Get Client Id and Client Secret from https://datamarket.azure.com/developer/applications/
-            //Refer obtaining AccessToken (http://msdn.microsoft.com/en-us/library/hh454950.aspx) 
-            AdmAuthentication admAuth = new AdmAuthentication("clientID", "client secret");
-            try
-            {
-                admToken = admAuth.GetAccessToken();
-                // Create a header with the access_token property of the returned token
-                headerValue = "Bearer " + admToken.access_token;
-                AddTranslationArrayMethod(headerValue);
-
-            }
-            catch (WebException e)
-            {
-                ProcessWebException(e);
-                Console.WriteLine("Press any key to continue...");
-                Console.ReadKey(true);
-            }
-            catch (Exception ex)
-            {
-
-                Console.WriteLine(ex.Message);
-                Console.WriteLine("Press any key to continue...");
-                Console.ReadKey(true);
-            }
-        }
-
-        private static void AddTranslationArrayMethod(string authToken)
+        public static async Task Run(string authToken)
         {
             string appId = "";
-            string uri = "http://api.microsofttranslator.com/v2/Http.svc/AddTranslationArray";
+            string uri = "https://api.microsofttranslator.com/v2/Http.svc/AddTranslationArray";
             string originalText1 = "una importante contribución a la rentabilidad de la empresa";
             string translatedText1 = "a significant contribution tothe company profitability";
             string originalText2 = "a veces los errores son divertidos";
             string translatedText2 = "in some cases errors are fun";
 
-
             string body = GenerateAddtranslationRequestBody(appId, "es", "en", "general", "text/plain", "", "TestUserId");
             string translationsCollection = string.Format("{0}{1}",
                 GenerateAddtranslationRequestElement(originalText1, 8, 0, translatedText1),
                 GenerateAddtranslationRequestElement(originalText2, 6, 0, translatedText2));
-
-            // update the body
             string requestBody = string.Format(body, translationsCollection);
 
-            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(uri);
-            request.ContentType = "text/xml";
-            request.Method = "POST";
-            request.Headers.Add("Authorization", authToken);
-            using (System.IO.Stream stream = request.GetRequestStream())
+            using (var client = new HttpClient())
+            using (var request = new HttpRequestMessage())
             {
-                
-                byte[] arrBytes = System.Text.ASCIIEncoding.ASCII.GetBytes(requestBody);
-                stream.Write(arrBytes, 0, arrBytes.Length);
-            }
-
-            // get the response
-            WebResponse response = null;
-            try
-            {
-                response = request.GetResponse();
-                using (Stream respStream = response.GetResponseStream())
+                request.Method = HttpMethod.Post;
+                request.RequestUri = new Uri(uri);
+                request.Content = new StringContent(requestBody, Encoding.UTF8, "text/xml");
+                request.Headers.Add("Authorization", authToken);
+                var response = await client.SendAsync(request);
+                if (response.IsSuccessStatusCode)
                 {
-                    Console.WriteLine(string.Format("Your translations for '{0}' and '{1}' has been added successfully.", originalText1, originalText2));
+                    Console.WriteLine("Your translations for '{0}' and '{1}' has been added successfully.", originalText1, originalText2);
+                }
+                else
+                {
+                    Console.WriteLine("AddTranslationArray request failed.");
+                    Console.WriteLine("  Request status code is: {0}.", response.StatusCode);
+                    Console.WriteLine("  Request error message: {0}.", await response.Content.ReadAsStringAsync());
                 }
             }
-            catch
-            {
-                throw;
-            }
-            finally
-            {
-                if (response != null)
-                {
-                    response.Close();
-                    response = null;
-                }
-            }
-            Console.WriteLine("Press any key to continue...");
-            Console.ReadKey(true);
-
         }
 
         private static string GenerateAddtranslationRequestBody(string appId, string from, string to, string category, string contentType, string uri, string user)
@@ -115,9 +58,6 @@ namespace MicrosoftTranslatorSdk.HttpSamples
                              "<Translations>{7}</Translations>" +
                            "</AddtranslationsRequest>";
             return string.Format(body, appId, from, category, contentType, user, uri, to, "{0}");
-
-
-
         }
 
         private static string GenerateAddtranslationRequestElement(string originalText, int rating, int sequence, string translatedText)
@@ -130,23 +70,5 @@ namespace MicrosoftTranslatorSdk.HttpSamples
                 "</Translation>";
             return string.Format(element, originalText, rating.ToString(), translatedText, sequence.ToString());
         }
-        private static void ProcessWebException(WebException e)
-        {
-            Console.WriteLine("{0}", e.ToString());
-            // Obtain detailed error information
-            string strResponse = string.Empty;
-            using (HttpWebResponse response = (HttpWebResponse)e.Response)
-            {
-                using (Stream responseStream = response.GetResponseStream())
-                {
-                    using (StreamReader sr = new StreamReader(responseStream, System.Text.Encoding.ASCII))
-                    {
-                        strResponse = sr.ReadToEnd();
-                    }
-                }
-            }
-            Console.WriteLine("Http status code={0}, error message={1}", e.Status, strResponse);
-        }
     }
-
 }
